@@ -35,7 +35,7 @@ unified_scraper.js  (Google Maps scrape: areas/keywords from config.json)
                                         └──► CFResults sheet (via result_tracker.js)
 ```
 
-`run.js` starts `unified_scraper.js` (single worker) + kicks off `autopush.js` in the background. `run1.js`..`run7.js` do the same but each pins `unified_scraper.js` to a different `WORKER_ID` (1-7), letting the `config.json` city list be split 7 ways and scraped in parallel — run several of them at once (separate terminals/tmux panes) instead of `run.js` to go faster. `fill.js` is the separate outer loop that watches the scraped CSV and auto-spawns `main.js` whenever there's a contact form to fill. `l1.py` and `blank_email_retry.js` both run independently (their own terminal) — `l1.py` just polls `l1.txt` forever, `blank_email_retry.js` runs once per invocation (re-run it whenever you want another retry pass).
+`run.js` starts `unified_scraper.js` (single worker) + kicks off `autopush.js` in the background. `run1.js`..`run7.js` do the same but each pins `unified_scraper.js` to a different `WORKER_ID` (1-7), letting the `config.json` city list be split 7 ways and scraped in parallel — run several of them at once (separate terminals/tmux panes) instead of `run.js` to go faster. `fill.js` is the separate outer loop that watches the scraped CSV and auto-spawns `main.js` whenever there's a contact form to fill. `l1.py` and `blank_email_retry.js` both run independently (their own terminal) and both poll forever, same pattern — `l1.py` re-checks `l1.txt` every 5 minutes, `blank_email_retry.js` re-checks the sheet for blank cells every 5 minutes. Stop either with Ctrl+C.
 
 ---
 
@@ -176,7 +176,8 @@ Rows `unified_scraper.js` already processed but left with a blank `All Emails`, 
 - Same email/Facebook/LinkedIn extraction policy as `unified_scraper.js` above (mailto trusted from any domain, free-mail accepted, `domcontentloaded` page loads) — plus, since it's only handling the residual hard cases rather than every business, it can afford a heavier fallback: guessing common contact-page paths (`/get-in-touch`, `/reach-us`, `/talk-to-us`, ...) even when no matching nav link was found at all
 - Writes back into the **same row** (`?action=updateMapContact`) — never blanks out a value a previous run already found, even if this run doesn't find it again
 - Feeds `l1.txt` with any new LinkedIn company URLs, same as `unified_scraper.js`
-- Resumable via `blank_email_progress.json` — Ctrl+C safe, rerun continues where it left off
+- Runs forever, one sweep every 5 minutes — same ongoing/poll-forever pattern as `l1.py`, not a one-shot script; stop with Ctrl+C
+- Resumable via `blank_email_progress.json` — Ctrl+C safe, restart continues where it left off instead of re-checking already-done rows
 
 ```bash
 node blank_email_retry.js
