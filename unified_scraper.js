@@ -449,22 +449,34 @@ async function scrapeWebsiteDetails(page, website) {
         //   4. Raw HTML source matched via regex — catches emails embedded
         //      in inline scripts / JSON data blobs that aren't in the
         //      rendered text or DOM attributes.
-        // Methods 2-4 are filtered to end with "@<domain>" so unrelated
-        // emails picked up from ads/widgets/third-party embeds on the page
-        // are excluded. mailto: links (method 1) are the exception — trusted
-        // regardless of domain, since a business that makes an address
-        // clickable has explicitly published it as *the* way to reach them,
-        // even when it's on a different brand/group domain than the
-        // marketing site (e.g. thebombaydigitalcompany.com linking
-        // mailto:info@tbdc.co.in — a real case this was silently dropping
-        // before this fix). Also returns every <a href> plus the raw HTML on
-        // the page, so the caller can pull Facebook/LinkedIn links out of
-        // the same page load instead of paying for a second evaluate.
+        // Methods 2-4 accept an email if it's on the site's own domain, OR
+        // on a well-known free-mail provider (gmail.com etc) — very common
+        // for small/local businesses to publish a Gmail address as their
+        // *only* contact email (unlike banks/enterprises, where that would
+        // be a red flag). Any other off-domain address picked up by these
+        // loose text-scan methods is still rejected, since without a
+        // structured signal there's no reliable way to tell a business's
+        // real off-domain contact apart from an unrelated third-party
+        // address (ad widget, testimonial, footer credit, etc.) mentioned
+        // incidentally on the page. mailto: links (method 1) are the
+        // exception — trusted regardless of domain, since a business that
+        // makes an address clickable has explicitly published it as *the*
+        // way to reach them, even when it's on a different brand/group
+        // domain than the marketing site (e.g. thebombaydigitalcompany.com
+        // linking mailto:info@tbdc.co.in — a real case this was silently
+        // dropping before this fix). Also returns every <a href> plus the
+        // raw HTML on the page, so the caller can pull Facebook/LinkedIn
+        // links out of the same page load instead of paying for a second
+        // evaluate.
         const extractPageData = async (domain) => {
             return page.evaluate((domain) => {
                 const emails = new Set();
                 const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
                 const strictEmailRe = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+                const freeEmailDomains = [
+                    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
+                    'live.com', 'aol.com', 'rediffmail.com', 'protonmail.com', 'msn.com',
+                ];
                 // Without the domain-match safety net, mailto: needs its own
                 // (light) junk filter so it doesn't pick up placeholder/
                 // tracking addresses that happen to be wired up as mailto:.
@@ -474,6 +486,7 @@ async function scrapeWebsiteDetails(page, website) {
                     'schema.org', 'w3.org', 'wordpress', 'godaddy.com',
                 ];
                 const isJunkEmail = e => !strictEmailRe.test(e) || skipPatterns.some(p => e.includes(p));
+                const isAcceptable = e => e.includes('@' + domain) || freeEmailDomains.some(fd => e.endsWith('@' + fd));
 
                 // 1. mailto: links — trusted regardless of domain (see note above).
                 document.querySelectorAll('a[href^="mailto:"]').forEach(a => {
@@ -489,19 +502,22 @@ async function scrapeWebsiteDetails(page, website) {
                         let email = '';
                         for (let i = 2; i < enc.length; i += 2)
                             email += String.fromCharCode(parseInt(enc.substr(i, 2), 16) ^ r);
-                        if (email.includes('@' + domain)) emails.add(email.toLowerCase());
+                        email = email.toLowerCase();
+                        if (isAcceptable(email)) emails.add(email);
                     } catch(_) {}
                 });
 
                 // 3. Plain text in body
                 (document.body.innerText.match(emailRegex) || []).forEach(e => {
-                    if (e.toLowerCase().includes('@' + domain)) emails.add(e.toLowerCase());
+                    e = e.toLowerCase();
+                    if (isAcceptable(e)) emails.add(e);
                 });
 
                 // 4. Raw HTML — catches JS-rendered, JSON bootstrap, encoded emails
                 const html = document.documentElement.innerHTML;
                 (html.match(emailRegex) || []).forEach(e => {
-                    if (e.toLowerCase().includes('@' + domain)) emails.add(e.toLowerCase());
+                    e = e.toLowerCase();
+                    if (isAcceptable(e)) emails.add(e);
                 });
 
                 // 5. Every anchor href — Facebook/LinkedIn links get filtered
