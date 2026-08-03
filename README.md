@@ -145,6 +145,7 @@ outreach-automation/
 | `unified_progress.json` / `unified_progress_<WORKER_ID>.json` | `unified_scraper.js` | search index + processed Maps URLs |
 | `processed_maps_urls.txt` | `unified_scraper.js` (all workers, shared) | one Maps URL per line, cross-worker de-dupe |
 | `form_results/progress.txt` | `main.js` | last processed index into `retry_urls.txt` |
+| `blank_email_progress.json` | `blank_email_retry.js` | `{ doneRows: [...] }` — MapData sheet row numbers |
 
 `l1.py` doesn't use a separate progress file — it resumes by reading which LinkedIn URLs are already in `linkedin_companies.csv`.
 
