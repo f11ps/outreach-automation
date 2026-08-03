@@ -297,13 +297,20 @@ function handleLinkedinData(body) {
   return respond({ success: true, sheet: LINKEDIN_SHEET, row: sheet.getLastRow() });
 }
 
-// ── GET handler (stats) ───────────────────────────────────────────────────────
+// ── GET handler (stats + blank-row retry actions) ──────────────────────────────
 // Apps Script's reserved function name for HTTP GET requests to the
-// deployed Web App URL. Provides a lightweight JSON "dashboard" of all
-// three sheets' row counts and a success/failed/skipped breakdown for
-// CFResults, without needing to open the spreadsheet UI.
-function doGet() {
+// deployed Web App URL. With no `action` param, provides a lightweight JSON
+// "dashboard" of all three sheets' row counts and a success/failed/skipped
+// breakdown for CFResults, without needing to open the spreadsheet UI. With
+// an `action` param, routes to a specific handler instead (used by
+// blank_email_retry.js).
+function doGet(e) {
   try {
+    const action = (e && e.parameter && e.parameter.action) || '';
+    if (action === 'health') return handleHealth();
+    if (action === 'getBlankEmailRows') return handleGetBlankEmailRows();
+    if (action === 'updateMapContact') return handleUpdateMapContact(e.parameter);
+
     const ss      = SpreadsheetApp.getActive();
     const mapSh   = ss.getSheetByName(MAP_SHEET);
     const cfSh    = ss.getSheetByName(CF_SHEET);
@@ -336,6 +343,87 @@ function doGet() {
   } catch (err) {
     return respond({ status: 'ERROR', error: err.message });
   }
+}
+
+// ── Blank-row retry actions (blank_email_retry.js) ─────────────────────────────
+// health: startup check — blank_email_retry.js calls this first to confirm
+// the deployed code.gs actually has the Facebook/LinkedIn columns it needs
+// before it starts scraping, rather than failing confusingly partway through.
+function handleHealth() {
+  const sheet = getOrCreateSheet(MAP_SHEET, MAP_HEADERS);
+  return respond({
+    success: true,
+    status: 'OK',
+    sheet: MAP_SHEET,
+    emailCol: MAP_HEADERS.indexOf('All Emails') + 1,
+    emailCountCol: MAP_HEADERS.indexOf('Email Count') + 1,
+    facebookCol: MAP_HEADERS.indexOf('Facebook') + 1,
+    linkedinCol: MAP_HEADERS.indexOf('LinkedIn') + 1,
+    rows: Math.max(0, sheet.getLastRow() - 1),
+    timestamp: new Date().toISOString(),
+  });
+}
+
+// Rows in MapData where All Emails, Facebook, OR LinkedIn is still blank
+// (and there's at least one website-ish URL to actually retry against).
+function handleGetBlankEmailRows() {
+  const sheet = getOrCreateSheet(MAP_SHEET, MAP_HEADERS);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return respond({ success: true, rows: [] });
+
+  const data = sheet.getRange(2, 1, lastRow - 1, MAP_HEADERS.length).getValues();
+  const rows = [];
+  data.forEach((r, idx) => {
+    const emails = String(r[12] || '').trim();
+    const facebook = String(r[14] || '').trim();
+    const linkedin = String(r[15] || '').trim();
+    const mapsWebsite = String(r[8] || '').trim();
+    const actualWebsite = String(r[9] || '').trim();
+    const contactFormUrl = String(r[10] || '').trim();
+    // Incomplete if ANY of the three is still blank — not just email.
+    if ((!emails || !facebook || !linkedin) && (actualWebsite || mapsWebsite || contactFormUrl)) {
+      rows.push({
+        row: idx + 2,
+        index: r[0],
+        name: r[3],
+        mapsWebsite,
+        actualWebsite,
+        contactFormUrl,
+        emails,
+        facebook,
+        linkedin,
+      });
+    }
+  });
+
+  return respond({ success: true, rows });
+}
+
+// Writes retry results back into the SAME row — never blanks out a value a
+// previous run already found (blank_email_retry.js only sends a field when
+// it has something to write, merging with the sheet's existing value
+// client-side first).
+function handleUpdateMapContact(params) {
+  const rowNum = Number(params.row || 0);
+  if (!rowNum || rowNum < 2) return respond({ success: false, error: 'INVALID_ROW' });
+
+  const sheet = getOrCreateSheet(MAP_SHEET, MAP_HEADERS);
+  const emails = params.emails || '';
+  const emailCount = params.emailCount || (emails ? String(emails.split(/[;,]/).filter(Boolean).length) : '');
+  const facebook = params.facebook || '';
+  const linkedin = params.linkedin || '';
+
+  sheet.getRange(rowNum, 13).setValue(emails);
+  sheet.getRange(rowNum, 14).setValue(emailCount);
+  sheet.getRange(rowNum, 15).setValue(facebook);
+  sheet.getRange(rowNum, 16).setValue(linkedin);
+  sheet.getRange(rowNum, 17).setValue(new Date().toISOString());
+
+  return respond({
+    success: true,
+    row: rowNum,
+    written: { emails, emailCount, facebook, linkedin },
+  });
 }
 
 // Shared response helper — serializes any object as a JSON HTTP response,
