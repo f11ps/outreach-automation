@@ -21,6 +21,11 @@ unified_scraper.js  (Google Maps scrape: areas/keywords from config.json)
                         ├──► linkedin_companies.csv
                         └──► LinkedInData sheet (via code.gs)
 
+        blank_email_retry.js  (fills blank All Emails/Facebook/LinkedIn cells)
+                        │
+                        ├──► email/Facebook/LinkedIn found → MapData sheet (same row)
+                        └──► new LinkedIn company URLs → l1.txt too
+
         fill.js  (watches digital_marketing_data.csv for new Contact-Form/Website URLs)
                         │
                         ▼
@@ -30,7 +35,7 @@ unified_scraper.js  (Google Maps scrape: areas/keywords from config.json)
                                         └──► CFResults sheet (via result_tracker.js)
 ```
 
-`run.js` starts `unified_scraper.js` (single worker) + kicks off `autopush.js` in the background. `run1.js`..`run7.js` do the same but each pins `unified_scraper.js` to a different `WORKER_ID` (1-7), letting the `config.json` city list be split 7 ways and scraped in parallel — run several of them at once (separate terminals/tmux panes) instead of `run.js` to go faster. `fill.js` is the separate outer loop that watches the scraped CSV and auto-spawns `main.js` whenever there's a contact form to fill. `l1.py` runs independently (its own terminal) and just polls `l1.txt` forever.
+`run.js` starts `unified_scraper.js` (single worker) + kicks off `autopush.js` in the background. `run1.js`..`run7.js` do the same but each pins `unified_scraper.js` to a different `WORKER_ID` (1-7), letting the `config.json` city list be split 7 ways and scraped in parallel — run several of them at once (separate terminals/tmux panes) instead of `run.js` to go faster. `fill.js` is the separate outer loop that watches the scraped CSV and auto-spawns `main.js` whenever there's a contact form to fill. `l1.py` and `blank_email_retry.js` both run independently (their own terminal) — `l1.py` just polls `l1.txt` forever, `blank_email_retry.js` runs once per invocation (re-run it whenever you want another retry pass).
 
 ---
 
