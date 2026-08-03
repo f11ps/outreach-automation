@@ -39,7 +39,8 @@ const SKIP_DOMAINS = [
   'maps.google.com', 'goo.gl', 'bit.ly', 'forms.gle', 'yelp.com', 'clutch.co',
 ];
 // Without a same-domain safety net (mailto: is trusted from any domain, see
-// isJunkEmail below), obvious junk/placeholder addresses need their own filter.
+// extractMailtoEmails below — it still runs every mailto: address through
+// isValidEmail), obvious junk/placeholder addresses need their own filter.
 const SKIP_EMAIL_PATTERNS = [
   'sentry', 'wixpress', 'example.com', 'domain.com', 'noreply', 'no-reply',
   'test@', 'user@', 'email@', 'name@', 'info@example', 'your@', 'yourname',
