@@ -402,10 +402,12 @@ async function scrapeWebsiteDetails(page, website) {
         // Step 1: Find contact page link from homepage.
         // Scans every same-domain <a href> on the homepage and keeps ones
         // whose URL path or link text contains any contact-ish keyword —
-        // not just "contact" (with separators stripped so "Contact-Us" /
-        // "contact_us" / "Contact Us" all match). This is what actually
-        // catches a link labelled/hrefed "Get in Touch" (e.g.
-        // /get-in-touch/) that has no literal "contact" substring at all.
+        // not just "contact". Plain substring match (lowercased, no
+        // separator-stripping needed: "contact" already matches inside
+        // "Contact-Us"/"contact_us" as-is) against the full CONTACT_KEYWORDS
+        // list is what actually catches a link labelled/hrefed "Get in
+        // Touch" (e.g. /get-in-touch/) that has no literal "contact"
+        // substring anywhere — a real site this missed before this fix.
         const contactLinks = await page.evaluate((keywords) => {
             const base = window.location.origin;
             const seen = new Set();
@@ -415,8 +417,8 @@ async function scrapeWebsiteDetails(page, website) {
                 let href = raw.startsWith('http') ? raw : (raw.startsWith('/') ? base + raw : '');
                 if (!href) continue;
                 try { if (new URL(href).hostname !== new URL(base).hostname) continue; } catch(_) { continue; }
-                const path = new URL(href).pathname.toLowerCase().replace(/[-_\/]/g, '');
-                const text = (a.textContent || '').trim().toLowerCase().replace(/[-_\s]/g, '');
+                const path = new URL(href).pathname.toLowerCase();
+                const text = (a.textContent || '').trim().toLowerCase();
                 if (keywords.some(k => path.includes(k) || text.includes(k))) {
                     if (!seen.has(href)) { seen.add(href); links.push(href); }
                 }
