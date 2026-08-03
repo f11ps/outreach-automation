@@ -211,14 +211,20 @@ Google Apps Script — 3 sheets managed:
 
 **POST** (`type` field selects handler): `map`, `cf`, `linkedin`
 
-**GET** (no `action` param): JSON stats summary — row counts for all three sheets, plus a success/failed/skipped breakdown for CFResults.
+**GET actions:**
+| Action | Purpose |
+|---|---|
+| *(none)* | JSON stats summary — row counts for all three sheets, plus a success/failed/skipped breakdown for CFResults |
+| `?action=health` | version + Facebook/LinkedIn column check (`blank_email_retry.js` calls this first, before scraping anything) |
+| `?action=getBlankEmailRows` | MapData rows still missing All Emails, Facebook, or LinkedIn (that have a website to retry against) |
+| `?action=updateMapContact&row=N&emails=...&facebook=...&linkedin=...` | updates that row's Email/Facebook/LinkedIn/Timestamp columns |
 
 ### Google Sheets Setup
 
 1. [script.google.com](https://script.google.com) → New Project
 2. Paste in `code.gs`
 3. Deploy → Web App → Anyone access
-4. Copy the Web App URL → set it as the `GOOGLE_SHEETS_URL` env var, or hardcode it into `unified_scraper.js`, `result_tracker.js`, and `l1.py` (all three currently point at the same deployment)
+4. Copy the Web App URL → set it as the `GOOGLE_SHEETS_URL` env var, or hardcode it into `unified_scraper.js`, `result_tracker.js`, `l1.py`, and `blank_email_retry.js` (all four currently point at the same deployment)
 
 Update karte waqt: **Deploy → Manage deployments → pencil icon → New version** use karo, "New deployment" nahi — isse URL same rehta hai aur teeno scripts mein baar-baar URL badalna nahi padta. (A "New deployment" instead mints a brand-new URL, which is why all three files needed a manual update the one time this project switched deployments.)
 
