@@ -35,6 +35,12 @@ RUN — LINKEDIN ENRICHMENT (reads l1.txt, fed automatically by the scraper)
 python3 l1.py               # separate terminal, polls l1.txt every 5 min forever
 
 
+RUN — RETRY BLANK EMAIL/FACEBOOK/LINKEDIN CELLS (already-scraped rows)
+------------------------------------------------------------------------------
+node blank_email_retry.js   # one pass over MapData rows with a blank cell;
+                             # re-run any time (resumable, marks rows done)
+
+
 RUN — CONTACT FORM FILLER
 ---------------------------
 node fill.js                # watches CSV, auto-spawns main.js when there's work
