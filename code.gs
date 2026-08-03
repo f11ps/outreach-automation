@@ -62,6 +62,9 @@
 //   POST <web-app-url>   body: {"type":"cf", "rows":[[...],...]}     -> appends to CFResults, colored by status
 //   POST <web-app-url>   body: {"type":"linkedin", ...named fields}  -> appends one row to LinkedInData
 //   GET  <web-app-url>                                                -> JSON stats summary of all sheets
+//   GET  <web-app-url>?action=health                                  -> version/column-presence check
+//   GET  <web-app-url>?action=getBlankEmailRows                       -> MapData rows missing email/FB/LinkedIn
+//   GET  <web-app-url>?action=updateMapContact&row=N&emails=...&facebook=...&linkedin=...  -> updates that row
 //
 // HOW / BY WHAT IT'S INVOKED:
 //   - It is deployed inside Google's infrastructure (Apps Script bound to
