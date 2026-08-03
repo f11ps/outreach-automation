@@ -360,6 +360,17 @@ function appendToL1Txt(urls) {
     fs.appendFileSync(L1_TXT_FILE, fresh.join('\n') + '\n', 'utf8');
 }
 
+// Link text/href keywords for contact-page discovery — this is what makes
+// it name-agnostic: a link labelled "Get in Touch" or "Customer Care" gets
+// found by its visible text even if the URL slug is nothing like "contact"
+// (e.g. thebombaydigitalcompany.com/get-in-touch/).
+const CONTACT_KEYWORDS = [
+    'contact', 'about', 'reach', 'touch', 'connect', 'email', 'enquir',
+    'inquir', 'support', 'help', 'talk', 'hire', 'quote', 'consult', 'meet',
+    'branch', 'location', 'office', 'write to us', 'feedback',
+    'customer service', 'customer care', 'get in touch', 'say hello',
+];
+
 // Visits a business's actual website (not the Maps listing) to find a
 // contact page and scrape emails from it, plus any Facebook/LinkedIn page
 // linked from the site. Returns
