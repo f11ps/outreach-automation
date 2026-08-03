@@ -1,0 +1,16 @@
+{
+  "name": "outreach-automation",
+  "version": "1.0.0",
+  "description": "Google Maps business scraper + email/Facebook/LinkedIn finder + LinkedIn enrichment + automated contact-form filler with CAPTCHA solving",
+  "main": "main.js",
+  "scripts": {
+    "start": "node run.js",
+    "scrape": "node unified_scraper.js",
+    "fill": "node fill.js"
+  },
+  "dependencies": {
+    "puppeteer": "^24.40.0",
+    "selenium-webdriver": "^4.27.1",
+    "tesseract.js": "^7.0.0"
+  }
+}

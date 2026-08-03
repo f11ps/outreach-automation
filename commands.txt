@@ -1,0 +1,65 @@
+OUTREACH AUTOMATION — COMMAND REFERENCE
+========================================
+
+SETUP (one-time)
+-----------------
+npm install
+pip install -r requirements.txt --break-system-packages
+
+config.json ships with a general-purpose default (areas/keywords for
+unified_scraper.js) — edit directly to retarget, shape:
+  { "areas": ["City1", "City2"], "keywords": ["digital marketing agency"] }
+
+Set the deployed Google Sheets Web App URL (or edit the hardcoded default in
+unified_scraper.js / result_tracker.js / l1.py):
+  export GOOGLE_SHEETS_URL="https://script.google.com/macros/s/XXXXX/exec"
+
+
+RUN — SCRAPE (Google Maps -> emails/Facebook/LinkedIn)
+--------------------------------------------------------
+node run.js                # single worker + autopush, foreground
+node unified_scraper.js    # scraper only, no autopush
+
+Parallel workers (faster — one command per terminal):
+  node run1.js
+  node run2.js
+  node run3.js
+  node run4.js
+  node run5.js
+  node run6.js
+  node run7.js
+
+
+RUN — LINKEDIN ENRICHMENT (reads l1.txt, fed automatically by the scraper)
+------------------------------------------------------------------------------
+python3 l1.py               # separate terminal, polls l1.txt every 5 min forever
+
+
+RUN — CONTACT FORM FILLER
+---------------------------
+node fill.js                # watches CSV, auto-spawns main.js when there's work
+node main.js                # form filler only (needs retry_urls.txt populated)
+
+
+DEPLOY code.gs (after ANY change to code.gs)
+-----------------------------------------------
+1. script.google.com -> open the bound project -> paste new code.gs
+2. Deploy -> Manage deployments -> pencil icon -> New version   (keeps same URL)
+   (do NOT use "New deployment" unless you intend to mint a new URL — if you
+   do, update GOOGLE_SHEETS_URL in unified_scraper.js, result_tracker.js, and
+   l1.py to match)
+
+
+HEALTH CHECK (confirm the deployed Web App is live and wired correctly)
+----------------------------------------------------------------------------
+curl -sL "$GOOGLE_SHEETS_URL"
+  -> {"status":"OK","mapData":{...},"cfResults":{...},"linkedinData":{...}}
+
+
+RESET / FORCE A FULL RE-RUN (delete only what you want to redo)
+--------------------------------------------------------------------
+rm unified_progress.json unified_progress_*.json    # re-scrape Maps from scratch
+rm processed_maps_urls.txt                          # clear cross-worker de-dupe
+rm form_results/progress.txt                        # re-run form filler from start
+# linkedin_companies.csv has no separate progress file — delete rows from it
+# (or the whole file) to make l1.py re-scrape those URLs

@@ -1,0 +1,21 @@
+# Python dependencies for this pipeline. Install with:
+#   pip install -r requirements.txt --break-system-packages
+#
+# Used by:
+#   l1.py                  -> requests, beautifulsoup4, pytz, tqdm
+#   hcaptcha_sb_solver.py   -> seleniumbase
+#   hcaptcha_cnn_solver.py  -> numpy, torch, torchvision, Pillow
+#   whisper_server.py       -> openai-whisper, pydub (optional; falls back to
+#                              passing audio to Whisper unconverted if absent)
+
+requests
+beautifulsoup4
+pytz
+tqdm
+seleniumbase
+numpy
+torch
+torchvision
+Pillow
+openai-whisper
+pydub

@@ -82,25 +82,25 @@ function getNextContact() {
     phone_local:        '9913298992',
     company:            'Perception System',
     website:            'https://www.perceptionsystem.com/',
-    subject:            'White-Label Dev & AI Services for Your Agency Clients',
+    subject:            'Website, SEO & AI Solutions to Grow Your Business',
     budget:             'Flexible',
     address:            'Ahmedabad, Gujarat, India',
     message: `Hi Team,
 
-I came across your agency and love the work you're doing for your clients!
+I came across your business and wanted to reach out directly.
 
-I'm reaching out from Perception System — a technology partner trusted by agencies like yours to deliver white-label services that you can resell under your own brand:
+I'm reaching out from Perception System — a technology partner helping businesses like yours grow with:
 
-• White-Label Web & Mobile App Development (CRM, ERP, SaaS, custom builds)
-• AI-powered automation & chatbot solutions for your clients
-• White-Label SEO, SMM & Pay-after-results Digital Marketing
-• Dedicated dev teams you can plug into your existing projects
+• Website Design & Development (fast, mobile-friendly, conversion-focused)
+• SEO & Digital Marketing to help more customers find you
+• AI-Powered Chatbots & Automation for customer support and lead follow-up
+• CRM & Lead Management tools to convert more enquiries into customers
 
-We work quietly in the background — your clients never know we exist. You get the credit, we do the heavy lifting.
+We handle the technology so you can focus on running your business — flexible engagement, no long contracts.
 
-Trusted by agencies serving Dubai Govt., Stanford University & 500+ global clients.
+Trusted by businesses across industries — including Dubai Govt. and Stanford University engagements, serving 500+ global clients.
 
-Would love to explore how we can help you scale without hiring overhead.
+Would love to explore how we can help your business grow online.
 
 Warm regards,
 ${full}

@@ -1,0 +1,10 @@
+node_modules/
+.driver-cache/
+*.png
+*.mp3
+*.wav
+*.jpg
+*.jpeg
+eng.traineddata
+__pycache__/
+cookies.json*

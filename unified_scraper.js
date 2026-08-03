@@ -7,9 +7,10 @@
 //   "digital marketing agencies" style businesses across a large list of
 //   cities/keywords (config.json), opens each business's Maps listing and
 //   website, extracts contact-relevant data (name, address, phone, website,
-//   contact-form URL, emails found on the site), and persists it so that a
-//   later stage (fill.js / main.js) can visit each business's contact page
-//   and submit a form.
+//   contact-form URL, emails + Facebook + LinkedIn found on the site), and
+//   persists it so that later stages can pick it up: fill.js / main.js
+//   (contact-form filling) and l1.py (LinkedIn company-page enrichment, via
+//   l1.txt).
 //
 // HOW IT WORKS (high level):
 //   1. loadConfig()   — reads config.json (areas/cities + keywords). If a
@@ -42,11 +43,16 @@
 //           early" ordering is what keeps parallel workers from racing on
 //           the same business.
 //        e. If the business has a usable website, visits it
-//           (scrapeWebsiteDetails) to find a contact page and scrape emails
-//           via several methods (mailto: links, Cloudflare email-obfuscation
-//           decoding, plain-text regex, and raw HTML regex).
+//           (scrapeWebsiteDetails) to find a contact page and, from the same
+//           page loads, scrape emails (mailto: links, Cloudflare
+//           email-obfuscation decoding, plain-text regex, raw HTML regex)
+//           plus any Facebook/LinkedIn page linked from the site
+//           (extractSocialLinks — validated/normalized, junk links like
+//           share/login/feed URLs rejected).
 //        f. Appends one row to digital_marketing_data.csv and POSTs the same
-//           row to a Google Sheets Apps Script Web App URL for a live view.
+//           row to a Google Sheets Apps Script Web App URL for a live view;
+//           any LinkedIn *company* URL found also gets appended to l1.txt
+//           (appendToL1Txt) for l1.py to scrape separately.
 //        g. Saves progress to disk after every business (fine-grained
 //           resume) and after every completed search (coarse-grained
 //           resume).
@@ -60,26 +66,30 @@
 //     unified_progress_<WORKER_ID>.json (own resume state),
 //     processed_maps_urls.txt (shared de-dupe set written by all workers),
 //     digital_marketing_data.csv (used as a fallback source of already-seen
-//     Maps URLs on startup).
-//   - Writes: digital_marketing_data.csv (scraped rows), the progress JSON
-//     file above, processed_maps_urls.txt (appends newly claimed URLs), and
-//     pushes each row to the Google Sheets Web App at GOOGLE_SHEETS_URL
-//     (backed by code.gs) for a live "MapData" sheet view.
+//     Maps URLs on startup), l1.txt (appended to, not read — see l1.py).
+//   - Writes: digital_marketing_data.csv (scraped rows, now including
+//     Facebook/LinkedIn columns), the progress JSON file above,
+//     processed_maps_urls.txt (appends newly claimed URLs), l1.txt (appends
+//     newly found LinkedIn company URLs), and pushes each row to the Google
+//     Sheets Web App at GOOGLE_SHEETS_URL (backed by code.gs) for a live
+//     "MapData" sheet view.
 //   - Launched by run.js (single worker) or run1.js..run7.js (parallel
 //     workers, each setting a different WORKER_ID env var).
 //   - Downstream: fill.js / main.js read digital_marketing_data.csv (via
 //     retry_urls.txt) to actually fill contact forms on the websites this
-//     scraper discovered.
+//     scraper discovered; l1.py reads l1.txt to enrich each LinkedIn company
+//     page found.
 //   - autopush.js (running in the background, spawned by run.js) watches
 //     this script's output files and auto-commits/pushes them to GitHub.
 // ════════════════════════════════════════════════════════════════════════════
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const path = require('path');
 
 // Google Apps Script Web App endpoint (deployed from code.gs) that appends
 // each scraped row to a live Google Sheet ("MapData" tab) in real time.
-const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxrirb17CXY4T1s_uvK-m9p29S-PrfIs8L4CZPCfVXCg8NwMZz0XMVs9scuKJiNhBFX/exec';
+const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwz28DvEzyPhZh9XsxhGMO1A5YpbFneKeeDmNduW2cp1GVnZuRzZw_xRYOj7TVZ9ZKf/exec';
 const CONFIG_FILE = 'config.json';
 
 // ── Worker-parallelism setup ──────────────────────────────────────────────
@@ -223,15 +233,137 @@ function saveProgress() {
 // call every run — workers append to the same shared CSV over time.
 function initCSV() {
     if (!fs.existsSync(CSV_FILE)) {
-        const headers = 'Index,Area,Keyword,Name,Rating,Reviews,Address,Phone,Maps Website,Actual Website,Contact Form URL,Maps URL,All Emails,Email Count,Timestamp\n';
+        const headers = 'Index,Area,Keyword,Name,Rating,Reviews,Address,Phone,Maps Website,Actual Website,Contact Form URL,Maps URL,All Emails,Email Count,Facebook,LinkedIn,Timestamp\n';
         fs.writeFileSync(CSV_FILE, headers);
         console.log('📄 CSV file created');
     }
 }
 
+// ── Social link helpers (Facebook/LinkedIn) ───────────────────────────────────
+// Catches social URLs embedded in inline scripts/JSON, not just <a> tags.
+const SOCIAL_URL_RE = /https?:\/\/[^\s'"<>]+(?:facebook|linkedin)\.com\/[^\s'"<>]+/gi;
+
+// Normalizes a raw Facebook/LinkedIn URL: unwraps Facebook's /l.php and
+// LinkedIn's /redir/redirect tracking-link wrappers, strips m./www. prefixes,
+// and truncates a LinkedIn URL like /company/xyz/posts down to the bare
+// /company/xyz canonical page.
+function cleanSocialUrl(raw) {
+    if (!raw) return '';
+    let u;
+    try {
+        u = new URL(raw);
+    } catch (_) {
+        try { u = new URL('https://' + String(raw).replace(/^\/+/, '')); }
+        catch (_) { return ''; }
+    }
+
+    let host = (u.hostname || '').toLowerCase();
+    const pathname = decodeURIComponent(u.pathname || '').replace(/\/+$/, '');
+
+    if (host.includes('facebook.com') && (pathname === '/l.php' || pathname === '/flx/warn')) {
+        const target = u.searchParams.get('u');
+        if (target) return cleanSocialUrl(target);
+    }
+    if (host.includes('linkedin.com') && pathname.startsWith('/redir/redirect')) {
+        const target = u.searchParams.get('url');
+        if (target) return cleanSocialUrl(target);
+    }
+
+    if (host.startsWith('m.')) host = host.slice(2);
+    if (host.startsWith('www.')) host = host.slice(4);
+    if (host.endsWith('.linkedin.com')) host = 'linkedin.com';
+    if (host.endsWith('.facebook.com')) host = 'facebook.com';
+    if (host === 'fb.com') host = 'facebook.com';
+
+    let finalPath = pathname;
+    if (host === 'linkedin.com') {
+        const segments = pathname.split('/').filter(Boolean);
+        if (segments.length > 2) finalPath = '/' + segments.slice(0, 2).join('/');
+    }
+
+    // LinkedIn's canonical form is www.linkedin.com — keep it explicit rather
+    // than relying on the bare domain to redirect there itself.
+    const finalHost = host === 'linkedin.com' ? 'www.linkedin.com' : host;
+
+    return `https://${finalHost}${finalPath}`;
+}
+
+// Rejects share/login/plugin/feed-style junk links so only real company or
+// profile pages count as a match.
+function isValidSocialUrl(rawUrl, network) {
+    const clean = cleanSocialUrl(rawUrl);
+    if (!clean) return false;
+    let u;
+    try { u = new URL(clean); } catch (_) { return false; }
+    const host = u.hostname.toLowerCase();
+    const p = u.pathname.toLowerCase().replace(/^\/+|\/+$/g, '');
+
+    if (network === 'facebook') {
+        if (!['facebook.com', 'fb.com'].includes(host)) return false;
+        const blocked = ['share', 'sharer', 'plugins', 'dialog', 'login', 'privacy', 'tr', 'events', 'policy', 'help', 'ads'];
+        return Boolean(p) && !blocked.some(b => p.startsWith(b));
+    }
+    if (network === 'linkedin') {
+        if (host !== 'www.linkedin.com') return false;
+        const allowed = ['company/', 'school/', 'showcase/', 'in/'];
+        const blocked = ['feed/', 'learning/', 'pulse/', 'posts/', 'sharearticle', 'sharing/'];
+        return allowed.some(a => p.startsWith(a)) && !blocked.some(b => p.startsWith(b));
+    }
+    return false;
+}
+
+// anchors: array of <a href> URLs from the page. html: raw page HTML (also
+// regex-scanned, since some sites only embed social links inside inline
+// scripts/JSON rather than real <a> tags).
+function extractSocialLinks(anchors, html) {
+    const links = { facebook: new Set(), linkedin: new Set() };
+
+    (anchors || []).forEach(href => {
+        ['facebook', 'linkedin'].forEach(net => {
+            if (isValidSocialUrl(href, net)) links[net].add(cleanSocialUrl(href));
+        });
+    });
+
+    const raw = (html || '').match(SOCIAL_URL_RE) || [];
+    raw.forEach(href => {
+        ['facebook', 'linkedin'].forEach(net => {
+            if (isValidSocialUrl(href, net)) links[net].add(cleanSocialUrl(href));
+        });
+    });
+
+    return { facebook: [...links.facebook].sort(), linkedin: [...links.linkedin].sort() };
+}
+
+// ── l1.txt feed (for l1.py) ────────────────────────────────────────────────
+// Every LinkedIn *company* URL this script finds also gets appended to
+// l1.txt (one per line, deduped) so l1.py can scrape its About section
+// directly — personal /in/ profile links are skipped since l1.py's
+// About-section extraction only targets company pages.
+const L1_TXT_FILE = path.join(__dirname, 'l1.txt');
+
+function appendToL1Txt(urls) {
+    const companyUrls = (urls || [])
+        .map(u => cleanSocialUrl(u))
+        .filter(u => u.toLowerCase().includes('linkedin.com/company/'));
+    if (!companyUrls.length) return;
+
+    let existing = new Set();
+    try {
+        if (fs.existsSync(L1_TXT_FILE)) {
+            existing = new Set(fs.readFileSync(L1_TXT_FILE, 'utf8').split('\n').map(l => l.trim()).filter(Boolean));
+        }
+    } catch (_) { /* start fresh if unreadable */ }
+
+    const fresh = companyUrls.filter(u => !existing.has(u));
+    if (!fresh.length) return;
+
+    fs.appendFileSync(L1_TXT_FILE, fresh.join('\n') + '\n', 'utf8');
+}
+
 // Visits a business's actual website (not the Maps listing) to find a
-// contact page and scrape emails from it. Returns
-// { emails, actualWebsite, contactFormUrl }.
+// contact page and scrape emails from it, plus any Facebook/LinkedIn page
+// linked from the site. Returns
+// { emails, actualWebsite, contactFormUrl, facebook, linkedin }.
 async function scrapeWebsiteDetails(page, website) {
     try {
         // Skip known ad-network / third-party directory / social-media
@@ -243,7 +375,7 @@ async function scrapeWebsiteDetails(page, website) {
         ];
         if (badPatterns.some(p => website.includes(p))) {
             console.log(`⏭️ Skipping ad/irrelevant site: ${website}`);
-            return { emails: [], actualWebsite: '', contactFormUrl: '' };
+            return { emails: [], actualWebsite: '', contactFormUrl: '', facebook: [], linkedin: [] };
         }
 
         console.log(`🌐 Visiting: ${website}`);
@@ -304,8 +436,10 @@ async function scrapeWebsiteDetails(page, website) {
         //      rendered text or DOM attributes.
         // In every case the match is filtered to end with "@<domain>" so
         // unrelated emails picked up from ads/widgets/third-party embeds on
-        // the page are excluded.
-        const extractMailto = async (domain) => {
+        // the page are excluded. Also returns every <a href> plus the raw
+        // HTML on the page, so the caller can pull Facebook/LinkedIn links
+        // out of the same page load instead of paying for a second evaluate.
+        const extractPageData = async (domain) => {
             return page.evaluate((domain) => {
                 const emails = new Set();
                 const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
@@ -334,43 +468,63 @@ async function scrapeWebsiteDetails(page, website) {
                 });
 
                 // 4. Raw HTML — catches JS-rendered, JSON bootstrap, encoded emails
-                (document.documentElement.innerHTML.match(emailRegex) || []).forEach(e => {
+                const html = document.documentElement.innerHTML;
+                (html.match(emailRegex) || []).forEach(e => {
                     if (e.toLowerCase().includes('@' + domain)) emails.add(e.toLowerCase());
                 });
 
-                return [...emails];
+                // 5. Every anchor href — Facebook/LinkedIn links get filtered
+                // and normalized on the Node side (extractSocialLinks).
+                const anchors = Array.from(document.querySelectorAll('a[href]')).map(a => a.href);
+
+                return { emails: [...emails], anchors, html };
             }, domain);
         };
 
         const siteDomain = new URL(page.url()).hostname.replace('www.', '');
 
         // Step 3: Check homepage first
-        let emails = await extractMailto(siteDomain);
+        let homepageData = await extractPageData(siteDomain);
+        let emails = homepageData.emails;
         console.log(`📧 Homepage mailto: ${emails.length}`);
 
+        const social = { facebook: new Set(), linkedin: new Set() };
+        const ingestSocial = (anchors, html) => {
+            const found = extractSocialLinks(anchors, html);
+            found.facebook.forEach(u => social.facebook.add(u));
+            found.linkedin.forEach(u => social.linkedin.add(u));
+        };
+        ingestSocial(homepageData.anchors, homepageData.html);
+
         // Step 4: Visit all discovered contact-ish pages (up to 3, from Step
-        // 1) and extract emails from each too, since many sites only list
-        // an email on their dedicated /contact page rather than the
-        // homepage.
+        // 1) and extract emails + social links from each too, since many
+        // sites only list an email/Facebook/LinkedIn link on their dedicated
+        // /contact or /about page rather than the homepage.
         let contactFormUrl = contactPageUrl;
         for (const link of contactLinks) {
             try {
                 await page.goto(link, { waitUntil: 'networkidle2', timeout: 10000 });
                 await new Promise(r => setTimeout(r, 1500));
-                const found = await extractMailto(siteDomain);
-                console.log(`📧 ${link} → ${found.length} emails`);
-                found.forEach(e => emails.push(e));
+                const linkData = await extractPageData(siteDomain);
+                console.log(`📧 ${link} → ${linkData.emails.length} emails`);
+                linkData.emails.forEach(e => emails.push(e));
+                ingestSocial(linkData.anchors, linkData.html);
             } catch (_) {}
         }
+
+        if (social.facebook.size) console.log(`📘 Facebook: ${[...social.facebook].join('; ')}`);
+        if (social.linkedin.size) console.log(`💼 LinkedIn: ${[...social.linkedin].join('; ')}`);
 
         return {
             emails: [...new Set(emails)],
             actualWebsite,
-            contactFormUrl: contactFormUrl || ''
+            contactFormUrl: contactFormUrl || '',
+            facebook: [...social.facebook].sort(),
+            linkedin: [...social.linkedin].sort()
         };
     } catch (error) {
         console.log(`❌ Error scraping ${website}: ${error.message}`);
-        return { emails: [], actualWebsite: '', contactFormUrl: '' };
+        return { emails: [], actualWebsite: '', contactFormUrl: '', facebook: [], linkedin: [] };
     }
 }
 
@@ -412,7 +566,7 @@ function saveToCSV(data) {
 // completed in this worker's progress file. See the file-level header
 // comment above for the overall flow; details are commented inline below.
 async function scrapeUnified() {
-    console.log('🚀 Starting unified Salesforce scraper...');
+    console.log('🚀 Starting unified Google Maps scraper...');
 
     loadConfig();
     loadProgress();
@@ -849,6 +1003,8 @@ async function scrapeUnified() {
                             totalEmails += emails.length;
                         }
 
+                        appendToL1Txt(websiteDetails.linkedin);
+
                         // Row layout matches the CSV header defined in initCSV().
                         const unifiedData = [
                             globalIndex,
@@ -865,6 +1021,8 @@ async function scrapeUnified() {
                             fullCompanyData.mapsUrl,
                             emails.join('; '),
                             emailCount,
+                            (websiteDetails.facebook || []).join('; '),
+                            (websiteDetails.linkedin || []).join('; '),
                             new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
                         ];
 
@@ -891,6 +1049,8 @@ async function scrapeUnified() {
                             fullCompanyData.mapsUrl,
                             '',
                             0,
+                            '', // No Facebook
+                            '', // No LinkedIn
                             new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
                         ];
 

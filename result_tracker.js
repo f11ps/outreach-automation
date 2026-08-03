@@ -89,7 +89,7 @@ const { CSV_FIELDS, CSV_PATH, PROGRESS_FILE, OUTPUT_DIR } = require('./config');
 // row updates and writes them into the "CFResults" sheet. Can be overridden
 // via the GOOGLE_SHEETS_URL env var without touching code; falls back to the
 // hardcoded default deployment URL.
-const SHEETS_URL = process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbxrirb17CXY4T1s_uvK-m9p29S-PrfIs8L4CZPCfVXCg8NwMZz0XMVs9scuKJiNhBFX/exec';
+const SHEETS_URL = process.env.GOOGLE_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbwz28DvEzyPhZh9XsxhGMO1A5YpbFneKeeDmNduW2cp1GVnZuRzZw_xRYOj7TVZ9ZKf/exec';
 
 // Best-effort push of one result row to the live Google Sheet. Builds the row
 // in the same column order as CSV_FIELDS (so the sheet and CSV stay aligned),
