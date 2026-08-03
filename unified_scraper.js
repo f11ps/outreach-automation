@@ -449,20 +449,36 @@ async function scrapeWebsiteDetails(page, website) {
         //   4. Raw HTML source matched via regex — catches emails embedded
         //      in inline scripts / JSON data blobs that aren't in the
         //      rendered text or DOM attributes.
-        // In every case the match is filtered to end with "@<domain>" so
-        // unrelated emails picked up from ads/widgets/third-party embeds on
-        // the page are excluded. Also returns every <a href> plus the raw
-        // HTML on the page, so the caller can pull Facebook/LinkedIn links
-        // out of the same page load instead of paying for a second evaluate.
+        // Methods 2-4 are filtered to end with "@<domain>" so unrelated
+        // emails picked up from ads/widgets/third-party embeds on the page
+        // are excluded. mailto: links (method 1) are the exception — trusted
+        // regardless of domain, since a business that makes an address
+        // clickable has explicitly published it as *the* way to reach them,
+        // even when it's on a different brand/group domain than the
+        // marketing site (e.g. thebombaydigitalcompany.com linking
+        // mailto:info@tbdc.co.in — a real case this was silently dropping
+        // before this fix). Also returns every <a href> plus the raw HTML on
+        // the page, so the caller can pull Facebook/LinkedIn links out of
+        // the same page load instead of paying for a second evaluate.
         const extractPageData = async (domain) => {
             return page.evaluate((domain) => {
                 const emails = new Set();
                 const emailRegex = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+                const strictEmailRe = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+                // Without the domain-match safety net, mailto: needs its own
+                // (light) junk filter so it doesn't pick up placeholder/
+                // tracking addresses that happen to be wired up as mailto:.
+                const skipPatterns = [
+                    'sentry', 'wixpress', 'example.com', 'domain.com', 'noreply', 'no-reply',
+                    'test@', 'user@', 'email@', 'name@', 'your@', 'sample', 'placeholder',
+                    'schema.org', 'w3.org', 'wordpress', 'godaddy.com',
+                ];
+                const isJunkEmail = e => !strictEmailRe.test(e) || skipPatterns.some(p => e.includes(p));
 
-                // 1. mailto: links
+                // 1. mailto: links — trusted regardless of domain (see note above).
                 document.querySelectorAll('a[href^="mailto:"]').forEach(a => {
                     const email = a.getAttribute('href').replace('mailto:', '').split('?')[0].trim().toLowerCase();
-                    if (email.includes('@' + domain)) emails.add(email);
+                    if (email && !isJunkEmail(email)) emails.add(email);
                 });
 
                 // 2. Cloudflare email protection
