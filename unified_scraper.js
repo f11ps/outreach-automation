@@ -395,7 +395,16 @@ async function scrapeWebsiteDetails(page, website) {
         // navigation isn't blocked/altered by leftover handlers.
         await page.setRequestInterception(false);
         page.removeAllListeners('request');
-        await page.goto(website, { waitUntil: 'networkidle2', timeout: 30000 });
+        // domcontentloaded, not networkidle2: a chat widget, analytics
+        // beacon, or WebSocket keeps the network "busy" indefinitely on a
+        // lot of real small-business sites, which made networkidle2 hang
+        // until the 30s timeout and throw — silently producing an
+        // all-blank row (empty actualWebsite/contactFormUrl/emails/
+        // facebook/linkedin) for a business whose site loaded fine, just
+        // never went network-idle. The nav links/mailto/social hrefs this
+        // function actually reads are static HTML, already present by
+        // domcontentloaded — no need to wait for every subresource anyway.
+        await page.goto(website, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await new Promise(r => setTimeout(r, 2000));
 
         // Prefer the canonical/og:url meta tag over page.url() when present,
