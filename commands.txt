@@ -67,5 +67,6 @@ RESET / FORCE A FULL RE-RUN (delete only what you want to redo)
 rm unified_progress.json unified_progress_*.json    # re-scrape Maps from scratch
 rm processed_maps_urls.txt                          # clear cross-worker de-dupe
 rm form_results/progress.txt                        # re-run form filler from start
+rm blank_email_progress.json                         # re-check every still-blank row again
 # linkedin_companies.csv has no separate progress file — delete rows from it
 # (or the whole file) to make l1.py re-scrape those URLs
