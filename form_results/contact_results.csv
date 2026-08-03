@@ -38,3 +38,4 @@ https://buzzmakers.in/contact,Failed,Submitted but no confirmation detected,Load
 https://thebombaydigitalcompany.com/get-in-touch/,Failed,No contact form detected,Loaded,2.4,Opened,Not found,,,,,,,
 https://alphadigi.in/contact/,Success,Verified thank-you / redirect,Loaded,3.7,Opened,Found,3,"full_name,email,message","first_name,last_name,phone,company,website,job_title,subject,budget,address",,Not present,Clicked: 'Submit' (score=120),Success detected
 https://digitalmarketingagencyinmumbai.com/contact-us/,Success,Verified thank-you / redirect,Loaded,0.4,Opened,Found,5,"full_name,phone,email,company,message","first_name,last_name,website,job_title,subject,budget,address",,Not present,Clicked: 'Submit' (score=120),Success detected
+https://create.wa.link/,Failed,No contact form detected,Loaded,10.7,Opened,Not found,,,,,,,

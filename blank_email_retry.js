@@ -16,7 +16,10 @@
 //   column (kept separate, never mixed together)
 // • Never blanks out a Facebook/LinkedIn/email value a previous run already
 //   found, even if this run doesn't find it again
+// • Runs forever, one sweep every 5 minutes (RECHECK_INTERVAL) — this is an
+//   ongoing process, same as l1.py, not a one-shot script; stop with Ctrl+C
 // • Resumable: progress saved after every row → Ctrl+C safe, rerun continues
+//   right where it left off instead of re-checking already-done rows
 // ─────────────────────────────────────────────────────────────────────────────
 
 const fs = require('fs');
@@ -647,25 +650,27 @@ function saveDoneRows(doneRows) {
   fs.writeFileSync(PROGRESS_FILE, JSON.stringify({ doneRows: [...doneRows] }, null, 2));
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────
-async function main() {
-  console.log('🚀 Blank-email retry + Facebook/LinkedIn finder\n');
+const RECHECK_INTERVAL = 300; // 5 minutes — this runs continuously, watching
+                               // for rows that are still blank (or newly
+                               // blank, from unified_scraper.js's latest
+                               // pass) instead of exiting after one sweep,
+                               // same polling pattern as l1.py.
 
-  const health = await checkWebapp();
-  console.log(`✅ Web app OK (sheet: ${health.sheet})`);
+// Tracked so the SIGINT handler below can close it on Ctrl+C — without
+// this, killing the process mid-batch would leave the headless Chrome
+// process orphaned instead of shutting down cleanly.
+let currentBrowser = null;
 
-  console.log('📥 Fetching blank rows...');
+// ── One sweep over whatever's currently blank ────────────────────────────
+// Returns the number of rows attempted this cycle (0 if there was nothing
+// pending — in which case no browser is even launched).
+async function runBatch() {
   const rows = await getBlankEmailRows();
-  console.log(`📊 Blank rows in sheet: ${rows.length}`);
-
   const doneRows = loadDoneRows();
   const pending = rows.filter(r => !doneRows.has(r.row));
-  console.log(`📊 Already processed: ${doneRows.size} | Pending: ${pending.length}\n`);
+  console.log(`📊 Blank rows in sheet: ${rows.length} | Already processed: ${doneRows.size} | Pending: ${pending.length}`);
 
-  if (!pending.length) {
-    console.log('✅ Nothing to do.');
-    return;
-  }
+  if (!pending.length) return 0;
 
   let browser = await puppeteer.launch({
     headless: true,
@@ -674,6 +679,7 @@ async function main() {
       '--disable-gpu', '--disable-blink-features=AutomationControlled',
     ],
   });
+  currentBrowser = browser;
   let page = await newPage(browser);
   let sinceRestart = 0;
 
@@ -688,6 +694,7 @@ async function main() {
           headless: true,
           args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
         });
+        currentBrowser = browser;
         page = await newPage(browser);
         sinceRestart = 0;
         console.log('  🔄 Browser restarted');
@@ -746,10 +753,44 @@ async function main() {
     }
   } finally {
     try { await browser.close(); } catch (_) {}
+    currentBrowser = null;
   }
 
-  console.log('\n🏁 Done!');
+  return pending.length;
 }
+
+// ── Main ──────────────────────────────────────────────────────────────────
+async function main() {
+  console.log('🚀 Blank-email retry + Facebook/LinkedIn finder');
+  console.log(`   watching every ${RECHECK_INTERVAL / 60} min for blank Email/Facebook/LinkedIn cells (Ctrl+C to stop)\n`);
+
+  const health = await checkWebapp();
+  console.log(`✅ Web app OK (sheet: ${health.sheet})\n`);
+
+  while (true) {
+    const count = await runBatch();
+    if (count) {
+      console.log(`\n✅ Processed ${count} row(s) this cycle.`);
+    } else {
+      console.log('😴 Nothing new to retry.');
+    }
+    console.log(`Checking again in ${RECHECK_INTERVAL / 60} min...\n`);
+    await sleep(RECHECK_INTERVAL * 1000);
+  }
+}
+
+// Node's default SIGINT behavior kills the process immediately, with no
+// chance for the `finally` in runBatch() to run — which would leave the
+// headless Chrome process orphaned if Ctrl+C lands mid-batch. This handler
+// closes it explicitly before exiting, same "stop cleanly" contract l1.py
+// gets for free from Python's KeyboardInterrupt.
+process.on('SIGINT', async () => {
+  console.log('\n⏸ Stopped by user.');
+  if (currentBrowser) {
+    try { await currentBrowser.close(); } catch (_) {}
+  }
+  process.exit(0);
+});
 
 if (require.main === module) {
   main().catch(err => {
