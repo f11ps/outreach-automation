@@ -52,8 +52,8 @@ DEPLOY code.gs (after ANY change to code.gs)
 1. script.google.com -> open the bound project -> paste new code.gs
 2. Deploy -> Manage deployments -> pencil icon -> New version   (keeps same URL)
    (do NOT use "New deployment" unless you intend to mint a new URL — if you
-   do, update GOOGLE_SHEETS_URL in unified_scraper.js, result_tracker.js, and
-   l1.py to match)
+   do, update GOOGLE_SHEETS_URL in unified_scraper.js, result_tracker.js,
+   l1.py, and blank_email_retry.js to match)
 
 
 HEALTH CHECK (confirm the deployed Web App is live and wired correctly)
