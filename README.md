@@ -66,6 +66,11 @@ LinkedIn company-page enrichment (separate terminal, runs continuously):
 python3 l1.py
 ```
 
+Retry blank email/Facebook/LinkedIn cells on rows already scraped (run whenever — e.g. after a code fix, or just periodically to mop up rows the first pass missed):
+```bash
+node blank_email_retry.js
+```
+
 Or run any stage standalone:
 ```bash
 node unified_scraper.js   # Google Maps scrape only
