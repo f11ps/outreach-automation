@@ -91,12 +91,6 @@ const STRICT_EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const SOCIAL_URL_RE = /https?:\/\/[^\s'"<>]+(?:facebook|linkedin)\.com\/[^\s'"<>]+/gi;
 
 // ── Email helpers ─────────────────────────────────────────────────────────
-function isJunkEmail(email) {
-  email = (email || '').toLowerCase().trim();
-  if (email.length > 100 || email.length < 6) return false === false && true; // unreachable guard kept explicit below
-  return true;
-}
-
 function isValidEmail(email) {
   email = (email || '').toLowerCase().trim();
   if (email.length > 100 || email.length < 6) return false;
