@@ -94,7 +94,9 @@ outreach-automation/
 ├── l1.py                       # LinkedIn company "About" page scraper (resumable,
 │                               # polls l1.txt forever, pushes to LinkedInData sheet)
 ├── l1.txt                      # LinkedIn company URLs to scrape (auto-fed by
-│                               # unified_scraper.js's appendToL1Txt)
+│                               # unified_scraper.js's and blank_email_retry.js's appendToL1Txt)
+├── blank_email_retry.js        # Retries MapData rows still missing All Emails/Facebook/
+│                               # LinkedIn — same extraction policy as unified_scraper.js
 │
 ├── main.js                     # Contact-form filler main loop
 ├── fill.js                     # Watches digital_marketing_data.csv, queues URLs,
