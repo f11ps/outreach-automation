@@ -11,7 +11,7 @@ unified_scraper.js) — edit directly to retarget, shape:
   { "areas": ["City1", "City2"], "keywords": ["digital marketing agency"] }
 
 Set the deployed Google Sheets Web App URL (or edit the hardcoded default in
-unified_scraper.js / result_tracker.js / l1.py):
+unified_scraper.js / result_tracker.js / l1.py / blank_email_retry.js):
   export GOOGLE_SHEETS_URL="https://script.google.com/macros/s/XXXXX/exec"
 
 

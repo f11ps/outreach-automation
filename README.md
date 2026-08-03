@@ -226,7 +226,7 @@ Google Apps Script — 3 sheets managed:
 3. Deploy → Web App → Anyone access
 4. Copy the Web App URL → set it as the `GOOGLE_SHEETS_URL` env var, or hardcode it into `unified_scraper.js`, `result_tracker.js`, `l1.py`, and `blank_email_retry.js` (all four currently point at the same deployment)
 
-Update karte waqt: **Deploy → Manage deployments → pencil icon → New version** use karo, "New deployment" nahi — isse URL same rehta hai aur teeno scripts mein baar-baar URL badalna nahi padta. (A "New deployment" instead mints a brand-new URL, which is why all three files needed a manual update the one time this project switched deployments.)
+Update karte waqt: **Deploy → Manage deployments → pencil icon → New version** use karo, "New deployment" nahi — isse URL same rehta hai aur chaaron scripts mein baar-baar URL badalna nahi padta. (A "New deployment" instead mints a brand-new URL, which is why all four files needed a manual update the one time this project switched deployments.)
 
 3 tabs automatically banenge: `MapData`, `CFResults`, `LinkedInData`.
 
