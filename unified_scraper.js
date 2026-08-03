@@ -559,7 +559,7 @@ async function scrapeWebsiteDetails(page, website) {
         let contactFormUrl = contactPageUrl;
         for (const link of contactLinks) {
             try {
-                await page.goto(link, { waitUntil: 'networkidle2', timeout: 10000 });
+                await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 10000 });
                 await new Promise(r => setTimeout(r, 1500));
                 const linkData = await extractPageData(siteDomain);
                 console.log(`📧 ${link} → ${linkData.emails.length} emails`);
