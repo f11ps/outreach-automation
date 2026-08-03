@@ -37,8 +37,8 @@ python3 l1.py               # separate terminal, polls l1.txt every 5 min foreve
 
 RUN — RETRY BLANK EMAIL/FACEBOOK/LINKEDIN CELLS (already-scraped rows)
 ------------------------------------------------------------------------------
-node blank_email_retry.js   # one pass over MapData rows with a blank cell;
-                             # re-run any time (resumable, marks rows done)
+node blank_email_retry.js   # separate terminal, polls sheet every 5 min forever
+                             # (same pattern as l1.py) — Ctrl+C to stop
 
 
 RUN — CONTACT FORM FILLER
