@@ -155,14 +155,32 @@ All are safe to delete individually to force a full re-run of that one script; n
 
 ## Emails / Facebook / LinkedIn
 
-`unified_scraper.js` finds all three during the same website visit, in `scrapeWebsiteDetails()` — no separate retry pass needed:
+`unified_scraper.js` finds all three during the same website visit, in `scrapeWebsiteDetails()`:
 
-- **Emails**: mailto: links, Cloudflare email-obfuscation decoding, plain visible text, and raw HTML — all filtered to match the site's own domain.
+- **Emails** — four sources, each with its own trust level:
+  - **mailto: links** — trusted regardless of domain. A business that makes an address clickable has explicitly published it as *the* way to reach them, even when it's on a different brand/group domain than the marketing site (e.g. `thebombaydigitalcompany.com` linking `mailto:info@tbdc.co.in`). Still runs through a junk-pattern filter (rejects `noreply@`, `info@example.com`, tracking-pixel addresses, etc.) since there's no domain-match safety net for this tier.
+  - **Cloudflare email-obfuscation decoding, plain visible text, and raw HTML** — accepted only if the address matches the site's own domain, *or* is on a well-known free-mail provider (Gmail, Yahoo, Outlook, etc.). Free-mail is accepted here (unlike a strict enterprise tool) because small/local businesses very commonly publish only a Gmail address as their sole contact — rejecting those would miss a large share of real, legitimate contacts. Any other off-domain address found only via this loose text-scan is **not** accepted — there's no reliable way to tell a business's real off-domain contact apart from an unrelated third-party address (ad widget, footer "site by" credit, testimonial) mentioned incidentally on the page.
 - **Facebook / LinkedIn**: every `<a href>` on the page (plus a raw-HTML regex fallback for links embedded in scripts/JSON) is checked by `extractSocialLinks()` / `isValidSocialUrl()` / `cleanSocialUrl()`, which reject share/sharer/login/feed-style junk links, keep only real company/profile pages, unwrap Facebook's `/l.php` and LinkedIn's `/redir/redirect` tracking wrappers, and normalize a LinkedIn URL like `/company/xyz/posts` down to the bare `/company/xyz/` canonical page.
 
-Both the homepage and every discovered contact-page visit contribute to the final result — a business that only lists its Facebook page on `/about` rather than the homepage still gets caught. Results land in the `Facebook` / `LinkedIn` columns of `digital_marketing_data.csv` and the `MapData` sheet, right after `Email Count`.
+Both the homepage and every discovered contact-page visit contribute to the final result — a business that only lists its Facebook page on `/about` rather than the homepage still gets caught. Page loads use `domcontentloaded` (not `networkidle2`) specifically because a chat widget or analytics beacon can keep a real site's network "busy" indefinitely, which used to hang the whole visit until timeout and silently produce an all-blank row. Results land in the `Facebook` / `LinkedIn` columns of `digital_marketing_data.csv` and the `MapData` sheet, right after `Email Count`.
+
+Contact-page discovery matches a broad keyword list (`CONTACT_KEYWORDS` — "contact", "about", "touch", "get in touch", "reach", "customer care", etc.) against both link text and href, not just the literal word "contact" — this is what catches a nav link labelled "Get in Touch" pointing at `/get-in-touch/`, which has no "contact" substring anywhere.
 
 Every LinkedIn **company** URL found (personal `/in/` profiles are skipped) is also appended to `l1.txt` (deduped) via `appendToL1Txt()`, feeding the LinkedIn enrichment stage below.
+
+### Retrying blank cells — `blank_email_retry.js`
+
+Rows `unified_scraper.js` already processed but left with a blank `All Emails`, `Facebook`, or `LinkedIn` cell (site was slow/down that first pass, or was scraped before a fix like the ones above landed) don't get revisited by a normal scraper re-run — Maps URLs are marked processed once and skipped forever after. `blank_email_retry.js` is the separate, standalone pass that goes back over exactly those rows:
+
+- Pulls incomplete rows straight from the **live MapData sheet** (`?action=getBlankEmailRows`), not the local CSV
+- Same email/Facebook/LinkedIn extraction policy as `unified_scraper.js` above (mailto trusted from any domain, free-mail accepted, `domcontentloaded` page loads) — plus, since it's only handling the residual hard cases rather than every business, it can afford a heavier fallback: guessing common contact-page paths (`/get-in-touch`, `/reach-us`, `/talk-to-us`, ...) even when no matching nav link was found at all
+- Writes back into the **same row** (`?action=updateMapContact`) — never blanks out a value a previous run already found, even if this run doesn't find it again
+- Feeds `l1.txt` with any new LinkedIn company URLs, same as `unified_scraper.js`
+- Resumable via `blank_email_progress.json` — Ctrl+C safe, rerun continues where it left off
+
+```bash
+node blank_email_retry.js
+```
 
 ---
 
