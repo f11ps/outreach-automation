@@ -16,3 +16,4 @@ https://www.3mindsdigital.com/contact-us,Failed,Submitted but no confirmation de
 https://rridix.com/contact-us/,Success,Verified thank-you / redirect,Loaded,5.1,Opened,Found,5,"first_name,last_name,email,phone,message","full_name,company,website,job_title,subject,budget,address",,Not present,Clicked: 'Submit' (score=120),Success detected
 https://www.redrockindia.in/contact-us/,Failed,Submitted but no confirmation detected,Loaded,0.6,Opened,Found,6,"company,full_name,email,phone,select:quform_2_7,message","first_name,last_name,website,job_title,subject,budget,address",,Not present,Clicked: 'Send' (score=120),No confirmation
 https://1702digital.com/contact/,Skipped,Page load timeout,Timeout,,,,,,,,,,
+https://www.mediabarn.co.in/,Failed,No contact form detected,Loaded,2.0,Opened,Not found,,,,,,,
