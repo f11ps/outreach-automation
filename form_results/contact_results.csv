@@ -1,0 +1,2 @@
+url,status,details,load_status,load_time_s,contact_page_status,form_status,fields_filled,filled_fields,failed_fields,validation_status,captcha_status,submit_status,success_status
+https://digitactix.com/contact/,Failed,No contact form detected,Loaded,2.0,Opened,Not found,,,,,,,
