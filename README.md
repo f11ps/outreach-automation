@@ -77,7 +77,7 @@ node unified_scraper.js   # Google Maps scrape only
 node main.js               # contact form filler only (needs retry_urls.txt)
 ```
 
-`GOOGLE_SHEETS_URL` env var overrides the default deployed webapp URL for any of the above (`unified_scraper.js`, `result_tracker.js`, `l1.py` all default to the same deployment).
+`GOOGLE_SHEETS_URL` env var overrides the default deployed webapp URL for any of the above (`unified_scraper.js`, `result_tracker.js`, `l1.py`, `blank_email_retry.js` all default to the same deployment).
 
 ---
 
