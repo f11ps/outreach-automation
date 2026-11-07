@@ -1,145 +1,185 @@
 // ════════════════════════════════════════════════════════════════════════════
 // config.js — Central configuration & contact-identity rotator
-//
-// PURPOSE / ROLE IN THE PIPELINE:
-//   This is the single source of truth for:
-//     1. The pool of "sender" identities (name/email) that get rotated into
-//        contact forms — using several different names/emails spreads out
-//        the outreach and avoids every single form submission looking
-//        identical.
-//     2. The full message payload (name, phone, company, sales pitch text,
-//        etc.) that gets typed into each contact form.
-//     3. File-path / tuning constants used by the rest of the pipeline
-//        (where to read URLs from, where to write results, timeouts,
-//        captcha retry limits, and the list of CSV column names used when
-//        logging results).
-//
-// HOW IT WORKS (high level):
-//   - `_CONTACTS` is a hard-coded array of {first_name, last_name, email}.
-//   - `getNextContact()` picks the next contact round-robin (using a module
-//     -level counter `_contactIndex`), and builds a full "contact" object
-//     (name, phone, company, pitch message with the sender's name
-//     interpolated at the bottom, etc.). Every call advances the rotation,
-//     so each processed URL in main.js gets a different identity.
-//   - A single default `contact` is computed once at module load (for any
-//     code that wants a static contact instead of the rotating one), and
-//     then the rotation index is reset back to 0 so the *real* loop in
-//     main.js still starts from contact #0.
-//   - The rest of the file just defines plain constants (paths, timeouts,
-//     retry counts, CSV column list) and exports everything via
-//     `module.exports`.
-//
-// DEPENDENCIES / USED BY:
-//   - No dependencies of its own (pure constants/data module).
-//   - Imported by main.js (getNextContact, URL_FILE, OUTPUT_DIR, CSV_FIELDS,
-//     CAPTCHA_WAIT_TIMEOUT, MAX_CAPTCHA_RETRIES, CSV_PATH), and indirectly
-//     by other pipeline modules (result_tracker.js, driver_setup.js,
-//     captcha/handler.js, etc.) that need these same constants.
+// Configured for DigiForge Consulting SG (Singapore B2B Outreach)
 // ════════════════════════════════════════════════════════════════════════════
-
-// config.js
 'use strict';
 
-// ── Rotating contact identities ───────────────────────────────────────────────
-// Pool of sender identities. main.js calls getNextContact() once per URL so
-// consecutive form submissions don't all come from the exact same name/email —
-// several look-alike addresses under a couple of domains are used here.
+// ── Spintax Resolver ─────────────────────────────────────────────────────────
+// Resolves patterns like "{Hi|Hello|Hey}" into a randomly chosen variation.
+function resolveSpintax(text) {
+  if (!text) return '';
+  let match;
+  while ((match = /\{([^{}]+)\}/.exec(text)) !== null) {
+    const choices = match[1].split('|');
+    const randomChoice = choices[Math.floor(Math.random() * choices.length)];
+    text = text.replace(match[0], randomChoice);
+  }
+  return text;
+}
+
+// ── Rotating Sender Identities ───────────────────────────────────────────────
+// Primary verified domain inbox is info@digiforgeconsulting.com.
+// Environment variables can override or expand the identity pool.
 const _CONTACTS = [
-  { first_name: 'Farhan', last_name: 'Ansari',  email: 'farhan.ansari@perceptionsystem.in' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'rafiq@perceptionsystem.net' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'raf@perceptionsystem.net' },
-  { first_name: 'Ubbad',  last_name: 'Mansuri', email: 'ubbad@f3clicks.in' },
-  { first_name: 'Ubbad',  last_name: 'Mansuri', email: 'ubbad@f3clicks.net' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'rafiq@perceptionsystem.in' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'raf@perceptionsystem.in' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'rafiq@perceptionsystem.co.in' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'raf@perceptionsystem.co.in' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'raf@perceptionsystem.us' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'rafiq@perceptionsystem.us' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'rafiq@perceptionoutreach.com' },
-  { first_name: 'Rafiq',  last_name: 'Ansari',  email: 'raf@perceptionoutreach.com' },
+  {
+    first_name: process.env.DIGIFORGE_FIRST_NAME || 'Partnership',
+    last_name: process.env.DIGIFORGE_LAST_NAME || 'Team',
+    email: process.env.DIGIFORGE_EMAIL || 'info@digiforgeconsulting.com',
+  },
+  {
+    first_name: 'Commercial',
+    last_name: 'Director',
+    email: process.env.DIGIFORGE_EMAIL || 'info@digiforgeconsulting.com',
+  },
+  {
+    first_name: 'Client',
+    last_name: 'Solutions',
+    email: process.env.DIGIFORGE_EMAIL || 'info@digiforgeconsulting.com',
+  },
 ];
 
-// Module-level counter that tracks which _CONTACTS entry to hand out next.
 let _contactIndex = 0;
+let _angleRotationIndex = 0;
 
-// Returns the next contact in round-robin order, fully expanded into the
-// shape that fields.js / submitter.js expect (name pieces, phone, company,
-// website, subject line, and a full outreach message with the sender's name
-// stitched into the signature).
-function getNextContact() {
+// ── 3 Core Singapore B2B Outreach Angles ─────────────────────────────────────
+// Angle 1: Agency & MSP Channel Partner (White-label technical backend)
+function getAngle1Agency(full_name) {
+  const subject = resolveSpintax('{White-label tech & integration backend for your agency|Custom API & workflow integration partner for agencies|White-label technical delivery partner}');
+  const message = resolveSpintax(`{Hi Team|Hello|Hi there},
+
+Having worked with tech {partner channels|networks} across Singapore, we know how often local agency and MSP teams receive client requests for custom workflow automations, CRM pipelines, or portal integrations that distract from your core retainers.
+
+At DigiForge Consulting SG, we act as a dedicated white-label backend technical delivery team for Singapore agencies. We handle the custom integrations and automation sprints so you can say "yes" to client tech requests and retain {15–20%|15% to 20%} margin without {managing developers|writing a line of code}.
+
+Would love to do a brief 10-minute catchup this week to see if we can take any technical backlog off your plate.
+
+{Best regards|Warm regards|Kind regards},
+${full_name}
+DigiForge Consulting SG
+https://digiforgeconsulting.com
+info@digiforgeconsulting.com`);
+  return { subject, message };
+}
+
+// Angle 2: High-Value B2B Lead Capture & Instant WhatsApp Bridge (Sprint 1)
+function getAngle2LeadCapture(full_name) {
+  const subject = resolveSpintax('{Quick observation regarding your website lead flow|Instant WhatsApp & lead routing for your inquiry form|Eliminating lead leakage on website inquiries}');
+  const message = resolveSpintax(`{Hi Team|Hello|Hi there},
+
+I was looking at your inquiry page while reviewing B2B service firms in Singapore.
+
+When a prospective client submits a contact inquiry, there is {often no instant WhatsApp redirect or automated scheduling link|a delay before anyone can follow up by email}. For high-value Singapore B2B services, this delay causes {over 30%|30%+} of warm inquiries to drop off before the first conversation.
+
+We help Singapore firms bridge this gap with automated lead routing—instantly capturing form inquiries directly into WhatsApp and your CRM in real time. We deploy the complete flow in a focused 14-day sprint.
+
+If this is a priority for your team this quarter, happy to share how top local firms are setting this up.
+
+{Best regards|Warm regards|Kind regards},
+${full_name}
+DigiForge Consulting SG
+https://digiforgeconsulting.com
+info@digiforgeconsulting.com`);
+  return { subject, message };
+}
+
+// Angle 3: 14-Day Workflow & Order Automation Sprint (Sprint 2)
+function getAngle3OrderAutomation(full_name) {
+  const subject = resolveSpintax('{Automating order-to-invoice workflows in 14 days|Eliminating manual order entry from WhatsApp & email|Order-to-invoice automation sprint}');
+  const message = resolveSpintax(`{Hi Team|Hello|Hi there},
+
+Most growing trading and wholesale firms in Singapore lose {10–15 hours|15+ hours} every week manually processing incoming orders from WhatsApp/email into Xero or ERP invoices.
+
+Waiting 3 to 4 months for PSG/EDG grant approvals delays real progress. DigiForge delivers bounded automation sprints in 14 days flat—connecting your order intake directly to automated invoice creation for less than a typical grant co-payment.
+
+Would you be open to exploring how we can streamline your order operations this month?
+
+{Best regards|Warm regards|Kind regards},
+${full_name}
+DigiForge Consulting SG
+https://digiforgeconsulting.com
+info@digiforgeconsulting.com`);
+  return { subject, message };
+}
+
+// Selects the message angle dynamically based on URL keywords or round-robin
+function selectAnglePayload(urlOrHint, full_name) {
+  const lower = (urlOrHint || '').toLowerCase();
+
+  // Pattern detection from URL/domain/hint
+  const isAgency = /agency|marketing|digital|media|seo|web|design|creative|msp|tech\b|cloud|it-/.test(lower);
+  const isB2B = /recruit|search|talent|headhunt|staffing|secretar|incorporat|account|audit|legal|law|consult/.test(lower);
+  const isOperations = /wholesale|distribut|trading|import|export|freight|logistics|supply|warehouse|equipment/.test(lower);
+
+  if (isAgency) return getAngle1Agency(full_name);
+  if (isB2B) return getAngle2LeadCapture(full_name);
+  if (isOperations) return getAngle3OrderAutomation(full_name);
+
+  // Round-robin rotation if niche is ambiguous or unclassified
+  const angleChoosers = [getAngle1Agency, getAngle2LeadCapture, getAngle3OrderAutomation];
+  const chosenFn = angleChoosers[_angleRotationIndex % angleChoosers.length];
+  _angleRotationIndex++;
+  return chosenFn(full_name);
+}
+
+// Returns the next contact in round-robin order, fully expanded for fields.js
+function getNextContact(urlOrHint = '') {
   const base = _CONTACTS[_contactIndex % _CONTACTS.length];
   _contactIndex++;
-  const full = `${base.first_name} ${base.last_name}`;
+
+  const full = `${base.first_name} ${base.last_name}`.trim();
+  const rawPhone = process.env.DIGIFORGE_PHONE;
+  const cleanDigits = rawPhone.replace(/\D/g, '');
+  const localDigits = cleanDigits.startsWith('65') ? cleanDigits.slice(2) : cleanDigits;
+
+  const { subject, message } = selectAnglePayload(urlOrHint, full);
+
   return {
-    first_name:         base.first_name,
-    last_name:          base.last_name,
-    full_name:          full,
-    job_title:          'Business Development',
-    email:              base.email,
-    phone:              '+91 9913298992',
-    phone_country_code: '+91',
-    phone_local:        '9913298992',
-    company:            'Perception System',
-    website:            'https://www.perceptionsystem.com/',
-    subject:            'Website, SEO & AI Solutions to Grow Your Business',
-    budget:             'Flexible',
-    address:            'Ahmedabad, Gujarat, India',
-    message: `Hi Team,
-
-I came across your business and wanted to reach out directly.
-
-I'm reaching out from Perception System — a technology partner helping businesses like yours grow with:
-
-• Website Design & Development (fast, mobile-friendly, conversion-focused)
-• SEO & Digital Marketing to help more customers find you
-• AI-Powered Chatbots & Automation for customer support and lead follow-up
-• CRM & Lead Management tools to convert more enquiries into customers
-
-We handle the technology so you can focus on running your business — flexible engagement, no long contracts.
-
-Trusted by businesses across industries — including Dubai Govt. and Stanford University engagements, serving 500+ global clients.
-
-Would love to explore how we can help your business grow online.
-
-Warm regards,
-${full}
-Business Development | Perception System
-https://www.perceptionsystem.com/`,
+    first_name: base.first_name,
+    last_name: base.last_name,
+    full_name: full,
+    job_title: 'Partnerships & Solutions',
+    email: base.email,
+    phone: rawPhone,
+    phone_country_code: '+65',
+    phone_local: localDigits,
+    company: 'DigiForge Consulting SG',
+    website: 'https://digiforgeconsulting.com',
+    secondary_website: 'https://digiforge.sg',
+    country: 'Singapore',
+    address: 'Singapore',
+    subject: subject,
+    budget: 'Flexible',
+    message: message,
   };
 }
 
-// Default contact for backward compat.
-// Some code may just want `contact` (a static object) rather than calling
-// getNextContact() itself. Computing it here consumes one "slot" of the
-// rotation, so immediately reset the index back to 0 afterwards — otherwise
-// the real per-URL loop in main.js would skip contact #0 and start at #1.
+// Default contact for backward compat
 const contact = getNextContact();
-_contactIndex = 0; // reset so main loop starts from index 0
+_contactIndex = 0;
+_angleRotationIndex = 0;
 
 // ── File paths & tuning constants ─────────────────────────────────────────────
-const URL_FILE            = 'retry_urls.txt';           // input: list of URLs to process (one per line)
-const OUTPUT_DIR          = 'form_results';              // where results/logs/progress get written
-const CSV_PATH            = `${OUTPUT_DIR}/contact_results.csv`; // final results CSV
-const PROGRESS_FILE       = `${OUTPUT_DIR}/progress.txt`;        // tracks last processed index for resume support
-const PAGE_LOAD_TIMEOUT   = 20000;   // ms — how long a page is allowed to take to load before being treated as "slow"
-const CAPTCHA_WAIT_TIMEOUT= 20000;   // ms — how long to wait for a captcha to be solved
-const CAPTCHA_POLICY      = 'auto';  // captcha handling mode (auto-solve vs manual, etc.)
-const TWOCAPTCHA_API_KEY  = process.env.TWOCAPTCHA_API_KEY || null; // optional 3rd-party captcha-solving service key
-const CAPSOLVER_API_KEY   = process.env.CAPSOLVER_API_KEY  || null; // optional 3rd-party captcha-solving service key
-const MAX_CAPTCHA_RETRIES = 1;       // how many times main.js will retry a URL (fresh browser) if captcha solving fails
+const URL_FILE = 'retry_urls.txt';
+const OUTPUT_DIR = 'form_results';
+const CSV_PATH = `${OUTPUT_DIR}/contact_results.csv`;
+const PROGRESS_FILE = `${OUTPUT_DIR}/progress.txt`;
+const PAGE_LOAD_TIMEOUT = 20000;
+const CAPTCHA_WAIT_TIMEOUT = 20000;
+const CAPTCHA_POLICY = 'auto';
+const TWOCAPTCHA_API_KEY = process.env.TWOCAPTCHA_API_KEY || null;
+const CAPSOLVER_API_KEY = process.env.CAPSOLVER_API_KEY || null;
+const MAX_CAPTCHA_RETRIES = 1;
 
-// Column order used when writing the results CSV (result_tracker.js) — keeping
-// this centralized ensures every row has the same shape/order.
 const CSV_FIELDS = [
-  'url','status','details','load_status','load_time_s',
-  'contact_page_status','form_status','fields_filled',
-  'filled_fields','failed_fields',
-  'validation_status','captcha_status','submit_status','success_status',
+  'url', 'status', 'details', 'load_status', 'load_time_s',
+  'contact_page_status', 'form_status', 'fields_filled',
+  'filled_fields', 'failed_fields',
+  'validation_status', 'captcha_status', 'submit_status', 'success_status',
 ];
 
 module.exports = {
-  contact, getNextContact, URL_FILE, OUTPUT_DIR, CSV_PATH, PROGRESS_FILE,
+  contact, getNextContact, resolveSpintax,
+  URL_FILE, OUTPUT_DIR, CSV_PATH, PROGRESS_FILE,
   PAGE_LOAD_TIMEOUT, CAPTCHA_WAIT_TIMEOUT, CAPTCHA_POLICY,
   TWOCAPTCHA_API_KEY, CAPSOLVER_API_KEY, MAX_CAPTCHA_RETRIES, CSV_FIELDS,
 };

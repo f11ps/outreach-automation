@@ -320,8 +320,8 @@ async function processUrl(driver, url, record, contact) {
       record.url    = url;
       record.status = 'Failed';
 
-      const contact = getNextContact();
-      console.log(`   👤 ${contact.full_name} <${contact.email}>`);
+      const contact = getNextContact(url);
+      console.log(`   👤 ${contact.full_name} <${contact.email}> [Angle: "${contact.subject}"]`);
 
       // Fresh Chrome instance per attempt — avoids carrying over cookies/
       // state/detection flags from a previous failed attempt.

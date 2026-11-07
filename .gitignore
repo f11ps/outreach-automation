@@ -8,3 +8,11 @@ node_modules/
 eng.traineddata
 __pycache__/
 cookies.json*
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+token.json
+client_secret*.json
+

@@ -77,6 +77,9 @@ const CHROME_CANDIDATES = [
   '/usr/bin/google-chrome-stable',
   '/usr/bin/chromium-browser',
   '/usr/bin/chromium',
+  '/usr/bin/brave-browser',
+  '/usr/bin/brave',
+  '/opt/brave.com/brave/brave-browser',
 ];
 
 // Directory where `webdriver-manager` (wdm) caches downloaded ChromeDriver

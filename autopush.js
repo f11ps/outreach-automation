@@ -68,6 +68,8 @@ const DEBOUNCE_MS = 3000;
 const IGNORE = new Set([
   '.git', 'node_modules', 'form_results', '.wdm',
   'autopush.js', 'package-lock.json',
+  '.env', '.env.local', '.env.production',
+  'cookies.json', 'credentials.json', 'token.json',
 ]);
 
 let timer = null;

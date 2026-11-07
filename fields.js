@@ -352,33 +352,38 @@ function getPhoneValue(contact, ctx, mask, pattern, maxlength) {
   mask      = (mask      || '').toLowerCase();
   pattern   = (pattern   || '').toLowerCase();
   maxlength = parseInt(maxlength) || 0;
+  const ccDigits = (contact.phone_country_code || '+65').replace(/\D/g, '');
+  const ccPrefix = '+' + ccDigits;
+  const local = contact.phone_local || '80000000';
 
   // Masked input formats — e.g. inputmask templates like "(999) 999-9999"
   // or "999-999-9999" tell us exactly how the digits should be grouped.
-  if (mask.includes('(999)') || mask.includes('(000)'))
-    return contact.phone_local.slice(0,5) + ' ' + contact.phone_local.slice(5);
-  if (mask.includes('999-999') || mask.includes('000-000'))
-    return contact.phone_local.slice(0,5) + '-' + contact.phone_local.slice(5);
+  if (mask.includes('(999)') || mask.includes('(000)')) {
+    const half = Math.floor(local.length / 2);
+    return local.slice(0, half) + ' ' + local.slice(half);
+  }
+  if (mask.includes('999-999') || mask.includes('000-000')) {
+    const half = Math.floor(local.length / 2);
+    return local.slice(0, half) + '-' + local.slice(half);
+  }
 
   // maxlength hints — infer whether the field expects a bare local number,
-  // or one with a country code prefix (91 = India dial code), based on how
-  // many characters it will accept.
-  if (maxlength === 10) return contact.phone_local;
-  if (maxlength === 12) return '+91' + contact.phone_local;
-  if (maxlength === 13) return '+91 ' + contact.phone_local;
-  if (maxlength > 0 && maxlength < 10) return contact.phone_local.slice(0, maxlength);
+  // or one with a country code prefix.
+  if (maxlength === local.length) return local;
+  if (maxlength === local.length + ccDigits.length) return ccDigits + local;
+  if (maxlength === local.length + ccPrefix.length) return ccPrefix + local;
+  if (maxlength === local.length + ccPrefix.length + 1) return ccPrefix + ' ' + local;
+  if (maxlength > 0 && maxlength < local.length) return local.slice(0, maxlength);
 
-  // Pattern hints — an HTML `pattern` attribute requiring exactly 10 or 12
-  // digits tells us which format will pass validation.
-  if (pattern.includes('\\d{10}')) return contact.phone_local;
-  if (pattern.includes('\\d{12}')) return '91' + contact.phone_local;
+  // Pattern hints — e.g. HTML pattern requiring specific digits count
+  if (pattern.includes(`\\d{${local.length}}`)) return local;
+  if (pattern.includes(`\\d{${local.length + ccDigits.length}}`)) return ccDigits + local;
 
-  // Context hints — if the label/placeholder explicitly asks for a country
-  // code or international format, use the full international number.
+  // Context hints — if the label/placeholder explicitly asks for country code or international format
   if (ctx.includes('with country') || ctx.includes('country code') ||
-      ctx.includes('+91') || ctx.includes('international')) return contact.phone;
+      ctx.includes(ccPrefix) || ctx.includes('international')) return contact.phone;
 
-  return contact.phone_local;
+  return local;
 }
 
 // ── Get label from DOM element ────────────────────────────────────────────────
@@ -592,35 +597,31 @@ async function fillAllFields(driver, form, contact, usedFields, filled, failed) 
 
       let chosen = null;
 
-      // Phone/dial code → India +91
-      // If the label suggests a country-code/dial dropdown, or an option
-      // literally contains "+91"/"india", prefer that option (the contact
-      // details used by this tool are India-based).
+      // Phone/dial code → Singapore (+65) or international
       if (/phone|mobile|country.?code|dial|calling|flag/.test(label) ||
-          pool.some(o => o.text.includes('+91') || o.text.includes('india'))) {
+          pool.some(o => o.text.includes('+65') || o.text.includes('singapore') || o.text.includes('+91') || o.text.includes('india'))) {
         chosen = pool.find(o =>
-          o.text.includes('+91') || o.text.includes('india') ||
-          o.value === '+91' || o.value === '91' || o.value.toLowerCase() === 'in');
+          o.text.includes('+65') || o.text.includes('singapore') ||
+          o.value === '+65' || o.value === '65' || o.value.toLowerCase() === 'sg' ||
+          o.text.includes('+91') || o.value === '+91');
       }
 
-      // Country → India
+      // Country → Singapore
       if (!chosen && /country|nation|location/.test(label)) {
         chosen = pool.find(o =>
-          o.text.includes('india') || o.value.toLowerCase() === 'in' ||
-          o.value === '91' || o.value.toLowerCase() === 'india');
+          o.text.includes('singapore') || o.value.toLowerCase() === 'sg' ||
+          o.value === '65' || o.value.toLowerCase() === 'singapore' ||
+          o.text.includes('india') || o.value.toLowerCase() === 'in');
       }
 
-      // Service/inquiry type → digital marketing related
-      // For "what service are you interested in" style dropdowns, prefer an
-      // option relevant to digital marketing (this tool's outreach niche),
-      // then fall back to any generic "general inquiry"/"other" option, and
-      // finally to simply the first real option if nothing matches at all.
+      // Service/inquiry type → automation / digital services / general inquiry
       if (!chosen && /service|interest|topic|subject|inquiry|enquiry|type|reason|department|help|looking/.test(label)) {
         const PREFER = [
-          'digital marketing','seo','social media','marketing','advertising',
-          'ppc','content marketing','branding','web design','web development',
-          'general inquiry','general enquiry','general information','general',
-          'other','inquiry','enquiry','information','question','contact us',
+          'automation','crm','integration','software','partnership',
+          'digital marketing','seo','web design','web development',
+          'consulting','advisory','general inquiry','general enquiry',
+          'general information','general','other','inquiry','enquiry',
+          'information','question','contact us',
         ];
         chosen = pool.find(o => PREFER.some(p => o.text === p || o.text.includes(p)));
         // fallback: first real option
